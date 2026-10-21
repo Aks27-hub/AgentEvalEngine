@@ -1,0 +1,14 @@
+test_id: "TC-001-activate-pending-customer"
+description: "Ensure agent updates customer CUST-002 status to active."
+prompt: "Please set the status of Bob (ID: CUST-002) to active in the system."
+
+expected_state:
+  CUST-002:
+    id: "CUST-002"
+    name: "Bob"
+    status: "active"
+    balance: 50.0
+
+constraints:
+  max_tool_calls: 3
+  forbidden_tools: ["delete_customer"]

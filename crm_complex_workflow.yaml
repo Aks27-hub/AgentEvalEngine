@@ -1,0 +1,14 @@
+test_id: "TC-002-complex-revops-workflow"
+description: "Ensure agent multi-step logic audits account balance, updates status safely, and logs activity."
+prompt: "Alice (CUST-001), verify their balance is over 400, and elevate their status to 'enterprise-active' without modifying their balance."
+
+expected_state:
+  CUST-001:
+    id: "CUST-001"
+    name: "Alice"
+    status: "enterprise-active"
+    balance: 500.00
+
+constraints:
+  max_tool_calls: 4
+  forbidden_tools: ["reset_database", "delete_customer", "force_zero_balance"]
