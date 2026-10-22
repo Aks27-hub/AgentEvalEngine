@@ -1,4 +1,7 @@
 import yaml
+import os
+from google import genai
+from google.genai import types
 from sandbox import MockDatabase
 from evaluators.state_eval import evaluate_state_diff
 from evaluators.judge import evaluate_agent_reasoning
@@ -30,34 +33,85 @@ def run_test_case(yaml_path: str) -> dict:
     prompt = test_config["prompt"]
     test_id = test_config.get("test_id", "")
     tool_calls = []
-    
+    final_response = ""
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    client = genai.Client(api_key=api_key) if api_key else None
+    if client:
+        available_tools = {
+            "get_customer": db.get_customer,
+            "update_customer_status": db.update_customer_status
+        }
+        tools_config = [db.get_customer, db.update_customer_status]
+        messages = [prompt]
+
+        for _ in range(5):
+            response = client.models.generate_content(
+                model="gemini-3.5-flash",
+                contents=messages,
+                config=types.GenerateContentConfig(tools=tools_config, temperature=0.0,
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+                    system_instruction=(
+                        "You are an autonomous CRM operations agent. "
+                        "Execute the requested workflow using the available tools."
+                    )
+                )
+            )
+            if response.function_calls:
+                messages.append(response.candidates[0].content)
+                for fc in response.function_calls:
+                    fn_name = fc.name
+                    fn_args = dict(fc.args) if fc.args else {}
+                    if fn_name in available_tools:
+                        output = available_tools[fn_name](**fn_args)
+                    else:
+                        output = {"success": False, "error": f"Tool {fn_name} not found"}
+                    tool_calls.append({
+                        "tool_name": fn_name,
+                        "args": fn_args,
+                        "output": output
+                    })
+
+                    # messages.append(response.candidates[0].content)
+                    messages.append(
+                        types.Part.from_function_response(
+                            name=fn_name,
+                            response={"result": output}
+                        )
+                    )
+            else:
+                final_response = response.text or "Workflow completed successfully."
+                break
+
+    else:
     # 2. Simulate agent execution (Placeholder for real agent invocation)
     # In a full integration, you would pass 'prompt' to your agent framework here.
-    res = {}
-    if "TC-002" in test_id or "Alice" in prompt:
-        # Complex revops workflow simulation
-        audit_res = db.get_customer("CUST-001")
-        tool_calls.append({
-            "tool_name": "get_customer",
-            "args": {"cust_id": "CUST-001"},
-            "output": audit_res
-        })
-        update_res = db.update_customer_status("CUST-001", "enterprise-active")
-        tool_calls.append({
-            "tool_name": "update_customer_status",
-            "args": {"cust_id": "CUST-001", "new_status": "enterprise-active"},
-            "output": update_res
-        })
-    elif "CUST-002" in prompt or "Bob" in prompt:
-        res = db.update_customer_status("CUST-002", "active")
-        tool_calls.append({
-            "tool_name": "update_customer_status", 
-            "args": {"cust_id": "CUST-002", "new_status": "active"}, 
-            "output": res
-        })
+        res = {}
+        if "CUST-001" in prompt or "Alice" in prompt:
+            # Complex revops workflow simulation
+            audit_res = db.get_customer("CUST-001")
+            tool_calls.append({
+                "tool_name": "get_customer",
+                "args": {"cust_id": "CUST-001"},
+                "output": audit_res
+            })
+            update_res = db.update_customer_status("CUST-001", "enterprise-active")
+            tool_calls.append({
+                "tool_name": "update_customer_status",
+                "args": {"cust_id": "CUST-001", "new_status": "enterprise-active"},
+                "output": update_res
+            })
+        elif "CUST-002" in prompt or "Bob" in prompt:
+            res = db.update_customer_status("CUST-002", "active")
+            tool_calls.append({
+                "tool_name": "update_customer_status", 
+                "args": {"cust_id": "CUST-002", "new_status": "active"}, 
+                "output": res
+            })
+        final_response = f"Workflow completed successfully for {test_id}."
     
     final_state = db.get_snapshot()
-    final_response = f"Successfully executed workflow for test case {test_id}."
+    # final_response = f"Successfully executed workflow for test case {test_id}."
     
     # 3. Flatten state dictionaries for dot-notation/key diffing
     raw_expected = test_config.get("expected_state", {})
