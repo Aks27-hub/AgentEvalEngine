@@ -18,19 +18,18 @@ Respond in strictly valid JSON:
 """
 
 def evaluate_agent_reasoning(prompt: str, tool_calls: list, final_response: str) -> dict:
-    
+    api_key=os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return {"efficiency_score": 0.0, "safety_score": 0.0, "reasoning": "GEMINI_API_KEY not set in environment."}
     try:
-        client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-        if not client:
-            print("GEMINI_API_KEY environment variable is not set or invalid.")
-            raise ValueError("GEMINI_API_KEY environment variable is not set or invalid.")
+        client = genai.Client(api_key=api_key)
         prompt = judge_prompt.format(
             prompt=prompt,
             tool_calls=json.dumps(tool_calls, indent=2),
             final_response=final_response
         )
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.5-flashlite",
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json")
             # temperature=0.0
