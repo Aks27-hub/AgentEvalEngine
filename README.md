@@ -66,8 +66,6 @@ agent-eval-engine/
 
 ├── evaluators/
 
-│   ├── __init__.py
-
 │   ├── state_eval.py      # Deterministic state diff engine
 
 │   └── judge.py           # Gemini LLM-as-a-Judge evaluator
